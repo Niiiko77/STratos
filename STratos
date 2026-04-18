@@ -1,0 +1,123 @@
+REM ***************************************
+REM *            STratos v0.1             *
+REM *                                     *
+REM *  16 Avril 2026 - Par Nicolas CARON. * 
+REM ***************************************
+REM
+REM ***************************************
+REM *         BOUCLE PRINCIPALE           *
+REM ***************************************
+DO
+  ~XBIOS(37)
+  EXIT IF INKEY$<>""
+LOOP
+REM
+REM ***************************************
+REM *             PROCEDURES              *
+REM ***************************************
+REM
+REM *************** AFFICHE ***************
+PROCEDURE affiche(fichier$)
+  LOCAL i%,p_addr%,p_data$
+  IF EXIST(fichier$)
+    OPEN "I",#1,fichier$
+    SEEK #1,2
+    p_data$=SPACE$(32)
+    BGET #1,V:p_data$,32
+    FOR i%=0 TO 15
+      ~XBIOS(7,i%,DPEEK(V:p_data$+i%*2))
+    NEXT i%
+    BGET #1,screen_addr%,32000
+    CLOSE #1
+  ELSE
+    PRINT "Erreur : Fichier ";fichier$;" introuvable !"
+    PAUSE 50
+  ENDIF
+RETURN
+REM
+REM *************** CLOTURE ***************
+PROCEDURE cloture
+FOR i%=0 TO 15
+  ~XBIOS(7,i%,old_pal%(i%))
+NEXT i%
+SHOWM
+RESERVE
+EDIT
+RETURN
+REM
+REM **************** EFFACE ***************
+PROCEDURE efface
+BMOVE blank_addr%,screen_addr%,32000 
+RETURN
+REM
+REM **************** FADEIN ***************
+REM Utilisation : fadein(nomdefichier.pi1)
+REM ***************************************
+PROCEDURE fadeinpi1(f$)
+  LOCAL i%,p_data$,step%,c%,col%,r%,g%,b%,nr%,ng%,nb%,f_col%
+  IF EXIST(f$)
+    OPEN "I",#1,f$
+    SEEK #1,2
+    p_data$=SPACE$(32)
+    BGET #1,V:p_data$,32
+    BGET #1,screen_addr%,32000
+    CLOSE #1
+    FOR step%=0 TO 7
+      FOR c%=0 TO 15
+        col%=DPEEK(V:p_data$+c%*2)
+        r%=AND(SHR(col%,8),7)
+        g%=AND(SHR(col%,4),7)
+        b%=AND(col%,7)
+        nr%=(r%*step%)/7
+        ng%=(g%*step%)/7
+        nb%=(b%*step%)/7
+        f_col%=SHL(nr%,8) OR SHL(ng%,4) OR nb%
+        ~XBIOS(7,c%,f_col%)
+      NEXT c%
+      ~XBIOS(37)
+    NEXT step%
+  ELSE
+    PRINT "Erreur : ";f$;" introuvable."
+  ENDIF
+RETURN
+REM
+REM ************** FADEOUT ****************
+PROCEDURE fade_out
+  LOCAL i%,c%,col%,r%,g%,b%,nr%,ng%,nb%,f_col%,step%
+  DIM cur_pal%(16)
+  FOR i%=0 TO 15
+    cur_pal%(i%)=XBIOS(7,i%,-1)
+  NEXT i%
+  FOR step%=7 TO 0 STEP -1
+    FOR c%=0 TO 15
+      col%=cur_pal%(c%)
+      r%=AND(SHR(col%,8),7)
+      g%=AND(SHR(col%,4),7)
+      b%=AND(col%,7)
+      nr%=(r%*step%)/7
+      ng%=(g%*step%)/7
+      nb%=(b%*step%)/7
+      f_col%=SHL(nr%,8) OR SHL(ng%,4) OR nb%
+      ~XBIOS(7,c%,f_col%)
+    NEXT c%
+    ~XBIOS(37)
+  NEXT step%
+RETURN
+REM
+REM ************ INITIALISATION ***********
+PROCEDURE initialisation
+RESERVE 100000
+HIDEM
+REM Sauvegarde de la palette d'origine pour la remettre a la fin
+DIM old_pal%(16)
+FOR i%=0 TO 15
+  old_pal%(i%)=XBIOS(7,i%,-1)
+NEXT i%
+screen_addr%=XBIOS(3)
+blank_screen$=STRING$(32000,0)
+blank_addr%=V:blank_screen$
+RETURN
+REM
+REM ************* VARIABLES GLOBALES *************
+REM
+REM 
