@@ -1,23 +1,32 @@
 REM ***************************************
-REM *            STratos v0.1             *
+REM *          THE REMNANT v0.1           *
 REM *                                     *
-REM *  16 Avril 2026 - Par Nicolas CARON. * 
+REM *  23 Avril 2026 - Par Nicolas CARON. *
 REM ***************************************
 REM
 REM ***************************************
 REM *         BOUCLE PRINCIPALE           *
 REM ***************************************
+initialisation
+fadein("C:\REMNANT\GFX\PAPYCAT.PI1")
+PAUSE 200
+fadeout
+fadein("C:\REMNANT\GFX\TITLE.PI1")
+PAUSE 200
+fadeout
+nprint(0,0,"Welcome to the Remnant")
 DO
   ~XBIOS(37)
   EXIT IF INKEY$<>""
 LOOP
+cloture
 REM
 REM ***************************************
 REM *             PROCEDURES              *
 REM ***************************************
 REM
 REM *************** AFFICHE ***************
-PROCEDURE affiche(fichier$)
+> PROCEDURE affiche(fichier$)
   LOCAL i%,p_addr%,p_data$
   IF EXIST(fichier$)
     OPEN "I",#1,fichier$
@@ -36,25 +45,24 @@ PROCEDURE affiche(fichier$)
 RETURN
 REM
 REM *************** CLOTURE ***************
-PROCEDURE cloture
-FOR i%=0 TO 15
-  ~XBIOS(7,i%,old_pal%(i%))
-NEXT i%
-SHOWM
-RESERVE
-EDIT
+> PROCEDURE cloture
+  FOR i%=0 TO 15
+    ~XBIOS(7,i%,old_pal%(i%))
+  NEXT i%
+  SHOWM
+  EDIT
 RETURN
 REM
 REM **************** EFFACE ***************
-PROCEDURE efface
-BMOVE blank_addr%,screen_addr%,32000 
+> PROCEDURE efface
+  BMOVE blank_addr%,screen_addr%,32000
 RETURN
 REM
 REM **************** FADEIN ***************
 REM Utilisation : fadein(nomdefichier.pi1)
 REM ***************************************
-PROCEDURE fadeinpi1(f$)
-  LOCAL i%,p_data$,step%,c%,col%,r%,g%,b%,nr%,ng%,nb%,f_col%
+> PROCEDURE fadein(f$)
+  LOCAL p_data$,step%,c%,col%,r%,g%,b%,nr%,ng%,nb%,f_col%
   IF EXIST(f$)
     OPEN "I",#1,f$
     SEEK #1,2
@@ -82,7 +90,7 @@ PROCEDURE fadeinpi1(f$)
 RETURN
 REM
 REM ************** FADEOUT ****************
-PROCEDURE fade_out
+> PROCEDURE fadeout
   LOCAL i%,c%,col%,r%,g%,b%,nr%,ng%,nb%,f_col%,step%
   DIM cur_pal%(16)
   FOR i%=0 TO 15
@@ -102,22 +110,53 @@ PROCEDURE fade_out
     NEXT c%
     ~XBIOS(37)
   NEXT step%
+  ERASE cur_pal%()
 RETURN
 REM
 REM ************ INITIALISATION ***********
 PROCEDURE initialisation
-RESERVE 100000
-HIDEM
-REM Sauvegarde de la palette d'origine pour la remettre a la fin
-DIM old_pal%(16)
-FOR i%=0 TO 15
-  old_pal%(i%)=XBIOS(7,i%,-1)
-NEXT i%
-screen_addr%=XBIOS(3)
-blank_screen$=STRING$(32000,0)
-blank_addr%=V:blank_screen$
+  ~FRE(0)
+  RESERVE 100000
+  HIDEM
+  REM Sauvegarde de la palette d'origine pour la remettre a la fin
+  DIM old_pal%(16)
+  FOR i%=0 TO 15
+    old_pal%(i%)=XBIOS(7,i%,-1)
+  NEXT i%
+  screen_addr%=XBIOS(3)
+  blank_screen$=STRING$(32000,0)
+  blank_addr%=V:blank_screen$
+  INLINE font_buffer%,32000
+  OPEN "I",#1,"C:\REMNANT\GFX\FONT.pi1"
+  SEEK #1,34
+  BGET #1,font_buffer%,32000
+  CLOSE #1
+  DIM b%(15)
+  b%(8)=3
+  b%(1)=0
+  b%(3)=15
+  b%(10)=1
 RETURN
+REM ***************** NPRINT **************
+PROCEDURE nprint(x%,y%,txt$)
+  LOCAL l%,char%,sx%,sy%
+  FOR l%=1 TO LEN(txt$)
+    char%=ASC(MID$(txt$,l%,1))-32
+    sy%=(char% DIV 20)*16
+    sx%=(char% MOD 20)*16
+    b%(0)=sx%
+    b%(1)=sy%
+    b%(2)=sx%+15
+    b%(3)=sy%+15
+    b%(4)=x%
+    b%(5)=y%
+    b%(6)=x%+15
+    b%(7)=y%+15
+    RC_COPY font_buffer%,sx%+4,sy%+6,8,8 TO screen_addr%,x%,y%,7
+    ADD x%,8
+  NEXT l%
+RETURN
+REM
 REM
 REM ************* VARIABLES GLOBALES *************
 REM
-REM 
