@@ -1,12 +1,19 @@
-REM ***************************************
-REM *            STratos v0.1             *
-REM *                                     *
-REM *  23 Avril 2026 - Par Nicolas CARON. *
-REM ***************************************
+REM ********************************************************
+REM *                    STratos v0.1                      *
+REM *                                                      *
+REM *      Version du 2 Mai 2026 - Par Nicolas CARON       *
+REM ********************************************************
+REM *  AJOUTS & MODIFICATIONS                              *
+REM *  ----------------------                              *
+REM * Procédure de Sprites                                 *
+REM * Acquisition de la palette d'un fichier PI1           *
+REM * Nettoyage des commentaires                           *
+REM * Liste des variables                                  *
+REM ********************************************************
 REM
-REM ***************************************
-REM *         BOUCLE PRINCIPALE           *
-REM ***************************************
+REM ********************************************************
+REM *                 BOUCLE PRINCIPALE                    *
+REM ********************************************************
 initialisation
 DO
   ~XBIOS(37)
@@ -14,11 +21,11 @@ DO
 LOOP
 cloture
 REM
-REM ***************************************
-REM *             PROCEDURES              *
-REM ***************************************
+REM *******************************************************
+REM *                     PROCEDURES                      *
+REM *******************************************************
 REM
-REM *************** AFFICHE ***************
+REM *********************** AFFICHE ***********************
 > PROCEDURE affiche(fichier$)
   LOCAL i%,p_addr%,p_data$
   IF EXIST(fichier$)
@@ -34,6 +41,13 @@ REM *************** AFFICHE ***************
   ELSE
     PRINT "Erreur : Fichier ";fichier$;" introuvable !"
     PAUSE 50
+  ENDIF
+RETURN
+REM
+REM ******************* AFFSPRITE *******************
+PROCEDURE affsprite(n%,x%,y%)
+  IF n%>=0 AND n%<310
+    RC_COPY spr_buffer%,spr_x%(n%),spr_y%(n%),spr_w%(n%),spr_h%(n%) TO screen_addr%,x%,y%,13
   ENDIF
 RETURN
 REM
@@ -106,29 +120,121 @@ REM ************** FADEOUT ****************
   ERASE cur_pal%()
 RETURN
 REM
+REM *************** GET_PAL ***************
+REM Lit uniquement la palette d'un PI1
+REM ***************************************
+> PROCEDURE get_pal(f$)
+  LOCAL i%,p_data$
+  IF EXIST(f$)
+    OPEN "I",#1,f$
+    SEEK #1,2
+    p_data$=SPACE$(32)
+    BGET #1,V:p_data$,32
+    CLOSE #1
+    FOR i%=0 TO 15
+      ~XBIOS(7,i%,DPEEK(V:p_data$+i%*2))
+    NEXT i%
+  ELSE
+    PRINT "Fichier ";f$;" absent !"
+  ENDIF
+RETURN
+REM
 REM ************ INITIALISATION ***********
 PROCEDURE initialisation
+  REM --- 1. Déclaration des variables locales (Impératif au début) ---
+  LOCAL i%,n2%,n3%,sw%,sx%,sy%
+  
+  REM --- 2. Gestion de la mémoire et du système ---
   ~FRE(0)
-  RESERVE 100000
-  HIDEM
-  REM Sauvegarde de la palette d'origine pour la remettre a la fin
+  RESERVE 100000      ! Réserve de la mémoire pour le GFA
+  HIDEM               ! Cache la souris pour le jeu
+  
+  REM --- 3. Sauvegarde de la palette d'origine ---
   DIM old_pal%(16)
   FOR i%=0 TO 15
     old_pal%(i%)=XBIOS(7,i%,-1)
   NEXT i%
+  
+  REM --- 4. Adresses écrans et buffer d'effacement ---
   screen_addr%=XBIOS(3)
   blank_screen$=STRING$(32000,0)
   blank_addr%=V:blank_screen$
+  
+  REM --- 5. Chargement de la FONT (8x8) ---
   INLINE font_buffer%,32000
-  OPEN "I",#1,"C:\REMNANT\GFX\FONT.pi1"
-  SEEK #1,34
-  BGET #1,font_buffer%,32000
-  CLOSE #1
+  IF EXIST("C:\REMNANT\GFX\FONT.pi1")
+    OPEN "I",#1,"C:\REMNANT\GFX\FONT.pi1"
+    SEEK #1,34
+    BGET #1,font_buffer%,32000
+    CLOSE #1
+  ENDIF
+  
+  REM --- 6. Chargement des SPRITES ---
+  spr_buffer%=MALLOC(32000)
+  IF EXIST("C:\REMNANT\GFX\SPRITES.pi1")
+    OPEN "I",#1,"C:\REMNANT\GFX\SPRITES.pi1"
+    SEEK #1,34
+    BGET #1,spr_buffer%,32000
+    CLOSE #1
+  ELSE
+    PRINT "ERREUR: SPRITES.pi1 introuvable !"
+    PAUSE 100
+  ENDIF
+
+  REM --- 7. Création des Look-Up Tables (LUT) pour les sprites ---
+  REM On stocke X, Y, Largeur et Hauteur pour 310 sprites
+  DIM spr_x%(309),spr_y%(309),spr_w%(309),spr_h%(309)
+  
+  FOR i%=0 TO 309
+    IF i%<30
+      REM --- Zone 32x32 (3 rangées de 10) ---
+      sw%=32
+      sx%=(i% MOD 10)*32
+      sy%=(i% DIV 10)*32
+    ELSE IF i%<110
+      REM --- Zone 16x16 (4 rangées de 20) ---
+      n2%=i%-30
+      sw%=16
+      sx%=(n2% MOD 20)*16
+      sy%=96+(n2% DIV 20)*16    ! 96 = 3 lignes de 32
+    ELSE
+      REM --- Zone 8x8 (5 rangées de 40) ---
+      n3%=i%-110
+      sw%=8
+      sx%=(n3% MOD 40)*8
+      sy%=160+(n3% DIV 40)*8   ! 160 = 96 + (4 lignes de 16)
+    ENDIF
+    spr_x%(i%)=sx%
+    spr_y%(i%)=sy%
+    spr_w%(i%)=sw%
+    spr_h%(i%)=sw%
+  NEXT i%
+  REM --- 8. Paramètres pour la procédure nprint ---
   DIM b%(15)
   b%(8)=3
   b%(1)=0
   b%(3)=15
   b%(10)=1
+RETURN
+REM
+REM *************** LIGNECOULEUR ************
+PROCEDURE lignecouleur
+DIM a(8),b(8),c(8)
+FOR f=0 TO 8
+  a(f)=((f+1)*256+5*16+f) AND f<8
+  b(f)=((7-(f+1)*256)+f*16+7) AND f<8
+  c(f)=(7-(f+1)*16+f) AND f<8
+NEXT f
+FOR v=1 TO 999999 STEP 7
+  FOR t=ABS(-200+v MOD 400) DOWNTO 1
+  NEXT t
+  FOR f=0 TO 8
+    SETCOLOR t,a(f)
+    SETCOLOR t,b(f)
+    SETCOLOR t,c(f)
+  NEXT f
+  VSYNC
+NEXT v
 RETURN
 REM ***************** NPRINT **************
 PROCEDURE nprint(x%,y%,txt$)
@@ -151,5 +257,51 @@ PROCEDURE nprint(x%,y%,txt$)
 RETURN
 REM
 REM
-REM ************* VARIABLES GLOBALES *************
+REM ************* PROCEDURES A TRAITER *************
 REM
+REM ************* PROCEDURES A TESTER **************
+REM **************** TILED *************************
+DIM map%(40,25)
+BLOAD "LEVEL1.BIN",V:VARPTR(map%(0,0))
+FOR y%=0 TO 24
+  FOR x%=0 TO 39
+    tile_id% = map%(x%,y%)
+    src_x% = (tile_id% MOD 20) * 16
+    src_y% = (tile_id% \ 20) * 16
+    RC_COPY tile_buffer%,src_x%,src_y%,16,16 TO screen%,x%*16,y%*16
+  NEXT x%
+NEXT y%
+REM
+REM ************************ LISTE DES PROCEDURES ***********************
+REM
+REM affiche(fichier$) : Affiche une image au format .PI1, charge l'écran et met à jour la palette
+REM affsprite(n%,x%,y%) : Affiche le sprite $n\%$ aux coordonnées $x\%,y\%$ en mode transparent (masque géré par le mode $13$ de RC_COPY).
+REM cloture : Restitue la palette d'origine, libère la souris et rend la main à l'éditeur GFA
+REM efface : Efface l'écran de manière ultra-rapide en utilisant un BMOVE depuis la mémoire d'effacement (blank_addr%)
+REM fadein(f$) : Applique un fondu d'apparition de l'image
+REM fadeout : Applique un fondu de disparition de l'image
+REM get_pal(f$) : Récupère uniquement la palette (32 octets) d'un fichier image sans charger l'écran entier
+REM initialisation : Initialise la machine, alloue les buffers et pré-calcule les coordonnées des sprites dans les tableaux
+REM nprint(x%,y%,txt$) : Procédure optimisée qui dessine du texte sur l'écran en utilisant la table font_buffer%.
+REM
+REM *************************** VARIABLES *******************************
+REM
+REM Variables Globales et Tableaux
+REM screen_addr%Entier (%)Contient l'adresse physique de la mémoire vidéo (l'écran) retournée par XBIOS(3)
+REM old_pal%()Tableau d'entiersSauvegarde les 16 couleurs de la palette d'origine de l'Atari ST au démarrage pour la restaurer à la fin
+REM blank_screen$ChaîneChaîne de 32 000 octets remplie de zéros utilisée pour l'effacement rapide
+REM blank_addr%Entier (%)Contient l'adresse mémoire de blank_screen$ pour copier rapidement du vide vers l'écran
+REM font_buffer%Entier (%)Adresse mémoire où sont stockés les 32 000 octets du fichier FONT.pi1 de la police de texte
+REM spr_buffer%Entier (%)Adresse mémoire réservée avec MALLOC contenant les 32 000 octets des sprites (SPRITES.pi1)
+REM spr_x%()Tableau d'entiersLook-Up Table (LUT) contenant la coordonnée $X$ de la source de chaque sprite ($0$ à $309$)
+REM spr_y%()Tableau d'entiersLook-Up Table (LUT) contenant la coordonnée $Y$ de la source de chaque sprite ($0$ à $309$)
+REM spr_w%()Tableau d'entiersLook-Up Table (LUT) contenant la largeur ($W$) de chaque sprite
+REM spr_h%()Tableau d'entiersLook-Up Table (LUT) contenant la hauteur ($H$) de chaque sprite
+REM b%()Tableau d'entiersTableau de paramètres (16 éléments) utilisé par la procédure de texte nprint
+REM 
+REM Variables Locales Principales (nom, procédure concernées, rôle)
+REM i% affiche, cloture, get_pal,initialisation : Compteur de boucle standard
+REM p_addr% / p_data$ affiche, fadein : Chaîne ou adresse temporaire pour lire l'en-tête de palette du fichier 
+REM PI1.n%, x%, y% affsprite : Paramètres passés à l'appel de la procédure (numéro du sprite et coordonnées $X,Y$)
+REM sw%, sx%, sy%initialisationVariables temporaires utilisées pour calculer les tailles et coordonnées de la grille de sprites
+REM l%, char%nprintUtilisées pour extraire les caractères d'une chaîne de texte txt$
